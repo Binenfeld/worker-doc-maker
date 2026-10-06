@@ -9,7 +9,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -169,6 +172,24 @@ public final class FileIOHandler {
         try (Stream<Path> entries = Files.list(directory)) {
             return entries.filter(Files::isRegularFile).toList();
         }
+    }
+
+    /**
+     * Returns the most recently modified file directly inside the directory whose name ends with the given
+     * extension (case-insensitive, e.g. ".csv"), or empty if there is none or the directory does not exist.
+     * Office lock files ("~$name") are ignored.
+     */
+    public Optional<Path> newestFile(Path directory, String extension) throws IOException {
+        if (!Files.isDirectory(directory)) {
+            return Optional.empty();
+        }
+        String suffix = extension.toLowerCase(Locale.ROOT);
+        return listFiles(directory).stream()
+                .filter(p -> {
+                    String name = p.getFileName().toString();
+                    return name.toLowerCase(Locale.ROOT).endsWith(suffix) && !name.startsWith("~$");
+                })
+                .max(Comparator.comparingLong(p -> p.toFile().lastModified()));
     }
 
     public Charset getCharset() {

@@ -27,3 +27,11 @@ tasks.withType<JavaCompile>().configureEach {
 tasks.withType<JavaExec>().configureEach {
     jvmArgs("-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
 }
+
+// A runnable jar: build/libs/WorkerDocMaker.jar (java -jar WorkerDocMaker.jar). The project has no runtime dependencies.
+tasks.jar {
+    archiveFileName = "WorkerDocMaker.jar"
+    manifest {
+        attributes["Main-Class"] = "Main"
+    }
+}

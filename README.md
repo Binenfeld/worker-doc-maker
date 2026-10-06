@@ -27,18 +27,26 @@ The report is right-to-left Hebrew, with colored tables:
 ## Running it
 
 1. **Export the sheet.** Open the attendance workbook, select the current month's sheet (e.g. `10.2026`) and use
-   File → Save As → **CSV UTF-8 (Comma delimited)**. Save it as `1.csv` in the data folder.
-   It must be the UTF-8 variant, or the Hebrew text will be garbled.
-2. **Run `Main`** from IntelliJ, or from the command line:
+   File → Save As → **CSV UTF-8 (Comma delimited)**. Save it in `C:\workerdocmaker` under any name ending in
+   `.csv`. It must be the UTF-8 variant, or the Hebrew text will be garbled.
+2. **Build** (once, and again after code changes):
    ```
-   gradlew compileJava
-   java -cp build/classes/java/main Main
+   powershell -ExecutionPolicy Bypass -File scripts\build.ps1
    ```
-3. The report is written to the data folder as `פירוט עובדים <yyyy-mm-dd>.docx`. If `whatsapp.properties`
-   exists, the report is also sent on WhatsApp.
+   This produces `build\libs\WorkerDocMaker.jar`. The script uses `JAVA_HOME` if it is set, otherwise the newest
+   JDK in `~\.jdks` (where IntelliJ downloads JDKs).
+3. **Run:**
+   ```
+   powershell -ExecutionPolicy Bypass -File scripts\run.ps1
+   ```
+   To use a different folder, add `-InputFolder D:\some\folder`. You can also run `Main` from IntelliJ.
+4. The program reads the **newest** `.csv` in the folder and writes the report next to it as
+   `פירוט עובדים <yyyy-mm-dd>.docx`. If `whatsapp.properties` exists in the project folder, the report is also
+   sent on WhatsApp.
 
-The data folder is set in `Main.DATA_FOLDER` (currently the `excel docs` folder on the owner's desktop).
-Change it there if the files live somewhere else.
+The default input folder is `Main.DEFAULT_INPUT_FOLDER`. The jar also accepts a folder as its first argument
+(`java -jar WorkerDocMaker.jar <folder>`). Excel lock files (`~$…`) are ignored. `-ExecutionPolicy Bypass` is
+only needed if Windows blocks running scripts.
 
 ## Input format
 
@@ -105,8 +113,11 @@ Things to know:
 ## Project structure
 
 ```
+scripts/
+├── build.ps1                 builds build\libs\WorkerDocMaker.jar
+└── run.ps1                   runs the jar on the newest CSV in C:\workerdocmaker
 src/main/java/
-├── Main.java                 entry point: parse → write report → send
+├── Main.java                 entry point: newest CSV → parse → write report → send
 ├── models/
 │   └── Worker.java           one worker + WorkerState (the day-symbol enum)
 └── utils/
