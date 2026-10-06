@@ -1,0 +1,18 @@
+# Copy this file to whatsapp.properties (same folder) and fill it in.
+# whatsapp.properties holds your access token - never share it or commit it.
+
+# Access token. For testing: "Generate access token" on API Setup (expires in ~24h).
+# Permanent: Meta Business settings > System users > Generate token,
+# with the whatsapp_business_messaging permission.
+token=
+
+# WhatsApp > API Setup in your Meta app dashboard: "Phone number ID" (not the phone number itself)
+phoneNumberId=
+
+# Recipient in international format, digits only (e.g. 972501234567)
+recipient=
+
+# Approved template with a DOCUMENT header. Leave empty to send a plain document message,
+# which only arrives if the recipient messaged the business number in the last 24 hours.
+template=
+templateLanguage=he
