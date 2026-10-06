@@ -133,5 +133,8 @@ Headings use Word's built-in Heading styles, so they appear in Word's navigation
 
 ## License
 
-Proprietary, all rights reserved. See [LICENSE](LICENSE). Copying, modifying or distributing this code is not
-permitted without written permission.
+Copyright (C) 2026 Binenfeld
+
+This program is free software: you can redistribute it and/or modify it under the terms of the
+[GNU General Public License](LICENSE) as published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version. It is distributed WITHOUT ANY WARRANTY; see the license for details.
