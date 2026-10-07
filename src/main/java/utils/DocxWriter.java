@@ -5,6 +5,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -27,7 +28,24 @@ public final class DocxWriter {
     // A4 page (11906 twips wide) minus 1440-twip (1 inch) margins on each side.
     private static final int CONTENT_WIDTH = 11906 - 2 * 1440;
 
+    // Space between the two tables of addSideBySide (twips; 1 cm = 567).
+    private static final int SIDE_BY_SIDE_GAP = 400;
+
     private static final String TABLE_BORDER = "A6A6A6";
+
+    /**
+     * A table with an optional heading above it, for {@link #addSideBySide(Table, Table)}.
+     *
+     * @param heading       level-2 heading shown above the table, or null for none
+     * @param headers       header row (shaded, bold, repeated at the top of each page)
+     * @param rows          body rows; each row must have one cell per header
+     * @param footer        optional bold total row at the bottom, or null for none
+     * @param columnWeights relative column widths, e.g. {3, 1} makes the first column three times wider;
+     *                      pass nothing for equal widths
+     */
+    public record Table(String heading, TableColors colors, List<String> headers, List<List<String>> rows,
+                        List<String> footer, int... columnWeights) {
+    }
 
     /**
      * Colors for a table (hex RGB, no '#').
@@ -55,7 +73,7 @@ public final class DocxWriter {
     }
 
     public DocxWriter addTitle(String text) {
-        return addStyledParagraph("Title", text);
+        return addStyledParagraph("Title", text, false);
     }
 
     /** Adds a heading; level must be 1, 2 or 3. */
@@ -63,12 +81,20 @@ public final class DocxWriter {
         if (level < 1 || level > 3) {
             throw new IllegalArgumentException("Heading level must be 1, 2 or 3, got " + level);
         }
-        return addStyledParagraph("Heading" + level, text);
+        return addStyledParagraph("Heading" + level, text, false);
+    }
+
+    /** Same as {@link #addHeading(int, String)}, but the heading starts a new page. */
+    public DocxWriter addHeadingOnNewPage(int level, String text) {
+        if (level < 1 || level > 3) {
+            throw new IllegalArgumentException("Heading level must be 1, 2 or 3, got " + level);
+        }
+        return addStyledParagraph("Heading" + level, text, true);
     }
 
     /** Adds a normal paragraph. Line breaks (\n) inside the text are kept. */
     public DocxWriter addParagraph(String text) {
-        return addStyledParagraph(null, text);
+        return addStyledParagraph(null, text, false);
     }
 
     public DocxWriter addPageBreak() {
@@ -92,20 +118,77 @@ public final class DocxWriter {
     /** Same as {@link #addTable(List, List, List, int...)} with a chosen color theme. */
     public DocxWriter addTable(TableColors colors, List<String> headers, List<List<String>> rows, List<String> footer,
                                int... columnWeights) {
+        appendTable(new Table(null, colors, headers, rows, footer, columnWeights), CONTENT_WIDTH);
+        // Word needs a paragraph between a table and whatever follows it; keep it small.
+        appendSpacerParagraph();
+        return this;
+    }
+
+    /**
+     * Puts two tables next to each other, each half the page wide. The first is on the reading-direction start
+     * side (the right in a right-to-left document), the second on the other side.
+     *
+     * @param second the other half, or null to leave it empty
+     */
+    public DocxWriter addSideBySide(Table first, Table second) {
+        int cellWidth = CONTENT_WIDTH / 2;
+        String cellMargin = String.valueOf(SIDE_BY_SIDE_GAP / 2);
+
+        // An invisible two-column table, with one table nested in each cell.
+        body.append("<w:tbl><w:tblPr>");
+        if (rightToLeft) {
+            body.append("<w:bidiVisual/>");
+        }
+        body.append("<w:tblW w:w=\"").append(CONTENT_WIDTH).append("\" w:type=\"dxa\"/>")
+                .append("<w:tblBorders>")
+                .append(noBorder("top")).append(noBorder("left")).append(noBorder("bottom")).append(noBorder("right"))
+                .append(noBorder("insideH")).append(noBorder("insideV"))
+                .append("</w:tblBorders>")
+                .append("<w:tblLayout w:type=\"fixed\"/>")
+                .append("<w:tblCellMar><w:left w:w=\"0\" w:type=\"dxa\"/><w:right w:w=\"0\" w:type=\"dxa\"/></w:tblCellMar>")
+                .append("</w:tblPr><w:tblGrid>")
+                .append("<w:gridCol w:w=\"").append(cellWidth).append("\"/>")
+                .append("<w:gridCol w:w=\"").append(cellWidth).append("\"/>")
+                .append("</w:tblGrid><w:tr>");
+        for (Table table : Arrays.asList(first, second)) {
+            // Half the gap on each side of each cell keeps the two halves equal; the outer edges move in a little.
+            body.append("<w:tc><w:tcPr><w:tcW w:w=\"").append(cellWidth).append("\" w:type=\"dxa\"/>")
+                    .append("<w:tcMar><w:left w:w=\"").append(cellMargin).append("\" w:type=\"dxa\"/>")
+                    .append("<w:right w:w=\"").append(cellMargin).append("\" w:type=\"dxa\"/></w:tcMar>")
+                    .append("</w:tcPr>");
+            if (table != null) {
+                if (table.heading() != null) {
+                    addStyledParagraph("Heading2", table.heading(), false);
+                }
+                appendTable(table, cellWidth - SIDE_BY_SIDE_GAP);
+            }
+            // A table cell must end with a paragraph.
+            appendSpacerParagraph();
+            body.append("</w:tc>");
+        }
+        body.append("</w:tr></w:tbl>");
+        appendSpacerParagraph();
+        return this;
+    }
+
+    private void appendTable(Table table, int tableWidth) {
+        List<String> headers = table.headers();
+        List<List<String>> rows = table.rows();
+        TableColors colors = table.colors();
         int columns = headers.size();
-        int[] widths = columnWidths(columns, columnWeights);
+        int[] widths = columnWidths(tableWidth, columns, table.columnWeights());
 
         body.append("<w:tbl><w:tblPr>");
         if (rightToLeft) {
             body.append("<w:bidiVisual/>"); // first column on the right
         }
-        body.append("<w:tblW w:w=\"").append(CONTENT_WIDTH).append("\" w:type=\"dxa\"/>")
+        body.append("<w:tblW w:w=\"").append(tableWidth).append("\" w:type=\"dxa\"/>")
                 .append("<w:tblBorders>")
                 .append(border("top")).append(border("left")).append(border("bottom")).append(border("right"))
                 .append(border("insideH")).append(border("insideV"))
                 .append("</w:tblBorders>")
                 .append("<w:tblLayout w:type=\"fixed\"/>")
-                .append("<w:tblCellMar><w:left w:w=\"115\" w:type=\"dxa\"/><w:right w:w=\"115\" w:type=\"dxa\"/></w:tblCellMar>")
+                .append("<w:tblCellMar><w:left w:w=\"80\" w:type=\"dxa\"/><w:right w:w=\"80\" w:type=\"dxa\"/></w:tblCellMar>")
                 .append("</w:tblPr><w:tblGrid>");
         for (int width : widths) {
             body.append("<w:gridCol w:w=\"").append(width).append("\"/>");
@@ -120,14 +203,14 @@ public final class DocxWriter {
             }
             addTableRow(row, widths, i % 2 == 1 ? colors.band() : null, null, false, false);
         }
-        if (footer != null) {
-            addTableRow(footer, widths, colors.footer(), null, true, false);
+        if (table.footer() != null) {
+            addTableRow(table.footer(), widths, colors.footer(), null, true, false);
         }
-
         body.append("</w:tbl>");
-        // Word needs a paragraph between a table and whatever follows it; keep it small.
+    }
+
+    private void appendSpacerParagraph() {
         body.append("<w:p><w:pPr><w:spacing w:after=\"0\"/></w:pPr></w:p>");
-        return this;
     }
 
     /** Writes the document to the given path, creating parent folders if needed. */
@@ -145,10 +228,13 @@ public final class DocxWriter {
 
     // ---------- XML building ----------
 
-    private DocxWriter addStyledParagraph(String styleId, String text) {
+    private DocxWriter addStyledParagraph(String styleId, String text, boolean newPage) {
         body.append("<w:p><w:pPr>");
         if (styleId != null) {
             body.append("<w:pStyle w:val=\"").append(styleId).append("\"/>");
+        }
+        if (newPage) {
+            body.append("<w:pageBreakBefore/>");
         }
         if (rightToLeft) {
             body.append("<w:bidi/>");
@@ -210,7 +296,7 @@ public final class DocxWriter {
         body.append("</w:tr>");
     }
 
-    private static int[] columnWidths(int columns, int... weights) {
+    private static int[] columnWidths(int tableWidth, int columns, int... weights) {
         if (weights.length != 0 && weights.length != columns) {
             throw new IllegalArgumentException("Expected " + columns + " column weights, got " + weights.length);
         }
@@ -220,13 +306,17 @@ public final class DocxWriter {
         }
         int[] widths = new int[columns];
         for (int c = 0; c < columns; c++) {
-            widths[c] = CONTENT_WIDTH * (weights.length == 0 ? 1 : weights[c]) / totalWeight;
+            widths[c] = tableWidth * (weights.length == 0 ? 1 : weights[c]) / totalWeight;
         }
         return widths;
     }
 
     private static String border(String side) {
         return "<w:" + side + " w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"" + TABLE_BORDER + "\"/>";
+    }
+
+    private static String noBorder(String side) {
+        return "<w:" + side + " w:val=\"nil\"/>";
     }
 
     private String documentXml() {
