@@ -25,6 +25,8 @@ are half the page wide, two side by side (the first on the right). Headings that
 - JDK 21 or newer (the project is developed with JDK 26)
 - Gradle, through the included wrapper (`gradlew`); no external libraries are needed
 - Excel, to export the sheet to CSV
+- Microsoft Word (desktop), to convert the report to PDF. `PdfConverter` drives it through PowerShell, so this
+  needs Windows. Without Word the run fails after the .docx is written.
 
 ## Running it
 
@@ -121,13 +123,14 @@ scripts/
 ├── run.ps1                   runs the jar on the newest CSV in C:\workerdocmaker
 └── run.cmd                   double-click launcher for run.ps1
 src/main/java/
-├── Main.java                 entry point: newest CSV → parse → write report → send
+├── Main.java                 entry point: newest CSV → parse → write report → PDF → send
 ├── models/
 │   └── Worker.java           one worker + WorkerState (the day-symbol enum)
 └── utils/
     ├── WorkerParser.java     reads the CSV into workers
     ├── ReportFactory.java    lays out the report (sections, tables, sorting)
     ├── DocxWriter.java       minimal .docx writer (titles, headings, RTL, colored tables) without libraries
+    ├── PdfConverter.java     .docx → PDF through Word (PowerShell + COM); always closes the Word it starts
     ├── WhatsAppSender.java   WhatsApp Cloud API client (upload + send)
     └── FileIOHandler.java    small UTF-8 file helpers
 ```
