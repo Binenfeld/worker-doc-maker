@@ -49,9 +49,12 @@ public final class PdfConverter {
                 } catch {
                     throw "Microsoft Word could not be started (is it installed?): $($_.Exception.Message)"
                 }
-                $wordPid = Get-CimInstance Win32_Process -Filter "Name = 'WINWORD.EXE'" |
-                    Where-Object { $before -notcontains $_.ProcessId -and $_.CommandLine -like '*/Automation*' } |
-                    Select-Object -First 1 -ExpandProperty ProcessId
+                # Only needed for cleanup, so a failing lookup must not stop the conversion.
+                try {
+                    $wordPid = Get-CimInstance Win32_Process -Filter "Name = 'WINWORD.EXE'" |
+                        Where-Object { $before -notcontains $_.ProcessId -and $_.CommandLine -like '*/Automation*' } |
+                        Select-Object -First 1 -ExpandProperty ProcessId
+                } catch {}
                 if ($wordPid) {
                     [Console]::Out.WriteLine("WORDPID=$wordPid")
                     [Console]::Out.Flush()
@@ -60,11 +63,14 @@ public final class PdfConverter {
                 $word.DisplayAlerts = 0
                 $doc = $word.Documents.Open($env:WDM_DOCX, $false, $true, $false)
                 $doc.ExportAsFixedFormat($env:WDM_PDF, 17)
-                $doc.Close($false)
             } catch {
                 [Console]::Error.WriteLine($_.Exception.Message)
                 $failed = $true
             } finally {
+                # Close without saving first, so Quit can never stop to ask about unsaved changes.
+                if ($doc) {
+                    try { $doc.Close($false) } catch {}
+                }
                 if ($word) {
                     # No arguments: PowerShell cannot pass Quit's by-reference parameters (the document is already closed).
                     try { $word.Quit() } catch {}
