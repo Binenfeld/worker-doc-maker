@@ -39,6 +39,7 @@ The report is right-to-left Hebrew, with colored tables:
    ```
    powershell -ExecutionPolicy Bypass -File scripts\run.ps1
    ```
+   Or just **double-click `scripts\run.cmd`**, which does the same and keeps the window open to show the result.
    To use a different folder, add `-InputFolder D:\some\folder`. You can also run `Main` from IntelliJ.
 4. The program reads the **newest** `.csv` in the folder and writes the report next to it as
    `פירוט עובדים <yyyy-mm-dd>.docx`. If `whatsapp.properties` exists in the project folder, the report is also
@@ -115,7 +116,8 @@ Things to know:
 ```
 scripts/
 ├── build.ps1                 builds build\libs\WorkerDocMaker.jar
-└── run.ps1                   runs the jar on the newest CSV in C:\workerdocmaker
+├── run.ps1                   runs the jar on the newest CSV in C:\workerdocmaker
+└── run.cmd                   double-click launcher for run.ps1
 src/main/java/
 ├── Main.java                 entry point: newest CSV → parse → write report → send
 ├── models/
