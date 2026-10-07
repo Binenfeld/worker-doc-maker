@@ -1,7 +1,7 @@
 package utils;
 
 import java.io.IOException;
-import java.io.Reader;
+import java.io.StringReader;
 import java.net.ConnectException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -43,6 +43,11 @@ public final class WhatsAppSender {
     private static final String DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     private static final Pattern ID_PATTERN = Pattern.compile("\"id\"\\s*:\\s*\"([^\"]+)\"");
     private static final Pattern DIGITS = Pattern.compile("\\d+");
+    // Meta's access tokens are plain ASCII; anything else (a pasted space, quote or invisible mark) breaks the request.
+    private static final Pattern TOKEN = Pattern.compile("[A-Za-z0-9._~+/=-]+");
+    private static final String BYTE_ORDER_MARK = String.valueOf((char) 0xFEFF);
+    // Longest part of a non-JSON error response (e.g. a proxy's HTML page) that is shown.
+    private static final int MAX_SHOWN_BODY = 300;
 
     // Fields of Meta's error response: {"error":{"message":"...","code":190,"error_data":{"details":"..."}}}
     private static final Pattern ERROR_MESSAGE = Pattern.compile("\"message\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
@@ -57,24 +62,39 @@ public final class WhatsAppSender {
     private final String recipient;
     private final String template;
     private final String templateLanguage;
+    private final String settingsFile; // where the settings came from, named in error hints
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
 
     public WhatsAppSender(String token, String phoneNumberId, String recipient, String template, String templateLanguage) {
+        this(token, phoneNumberId, recipient, template, templateLanguage, null);
+    }
+
+    private WhatsAppSender(String token, String phoneNumberId, String recipient, String template,
+                           String templateLanguage, Path settingsFile) {
         this.token = token;
         this.phoneNumberId = phoneNumberId;
         this.recipient = recipient;
         this.template = template;
         this.templateLanguage = templateLanguage;
+        this.settingsFile = settingsFile == null ? "whatsapp.properties" : settingsFile.toString();
     }
 
     /** Creates a sender from a properties file (see the class comment for the keys). */
     public static WhatsAppSender fromProperties(Path path) throws IOException, UserFacingException {
         Properties props = new Properties();
-        try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
-            props.load(reader);
+        try {
+            // Notepad's "UTF-8 with BOM" starts the file with an invisible character that would hide the first key.
+            String text = Files.readString(path, StandardCharsets.UTF_8);
+            props.load(new StringReader(text.startsWith(BYTE_ORDER_MARK) ? text.substring(1) : text));
         } catch (CharacterCodingException e) {
             throw new UserFacingException(path + " is not saved as UTF-8. Save it again as UTF-8 (in Notepad:"
                     + " File > Save As > Encoding: UTF-8).", e);
+        }
+        String token = required(props, "token", path);
+        if (!TOKEN.matcher(token).matches()) {
+            // Never print the token itself: it is a secret, and the console may end up in a screenshot.
+            throw new UserFacingException("The token in " + path + " contains spaces, quotes or invisible or"
+                    + " non-Latin characters. Copy it again from Meta and paste it right after \"token=\".");
         }
         String phoneNumberId = required(props, "phoneNumberId", path);
         if (!DIGITS.matcher(phoneNumberId).matches()) {
@@ -88,12 +108,8 @@ public final class WhatsAppSender {
                     + " format, e.g. 972501234567 (no +, spaces, dashes or leading 0), got \"" + recipient + "\".");
         }
         String template = props.getProperty("template", "").trim();
-        return new WhatsAppSender(
-                required(props, "token", path),
-                phoneNumberId,
-                recipient,
-                template.isEmpty() ? null : template,
-                props.getProperty("templateLanguage", "he").trim());
+        return new WhatsAppSender(token, phoneNumberId, recipient, template.isEmpty() ? null : template,
+                props.getProperty("templateLanguage", "he").trim(), path.toAbsolutePath());
     }
 
     /**
@@ -128,7 +144,7 @@ public final class WhatsAppSender {
         if (template == null) {
             // Meta accepts the message either way; it only fails to deliver it later, and doesn't tell us.
             System.out.println("Note: no template is set, so it only arrives if " + recipient + " sent a message to"
-                    + " the business number in the last 24 hours. Set \"template\" in whatsapp.properties to"
+                    + " the business number in the last 24 hours. Set \"template\" in " + settingsFile + " to"
                     + " deliver at any time.");
         }
     }
@@ -168,7 +184,7 @@ public final class WhatsAppSender {
 
         Matcher m = ID_PATTERN.matcher(body);
         if (!m.find()) {
-            throw new UserFacingException("WhatsApp accepted the upload but returned no media ID: " + body);
+            throw new UserFacingException("WhatsApp accepted the upload but returned no media ID: " + shorten(body));
         }
         return m.group(1);
     }
@@ -204,7 +220,7 @@ public final class WhatsAppSender {
         if (code != null) {
             sb.append(", error ").append(code);
         }
-        sb.append("): ").append(message != null ? message : body);
+        sb.append("): ").append(message != null ? message : shorten(body));
         if (details != null && !details.equals(message)) {
             sb.append(" - ").append(details);
         }
@@ -218,12 +234,13 @@ public final class WhatsAppSender {
     // What to do about the most common Cloud API errors (https://developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes).
     private String hint(String code) {
         return switch (code) {
-            case "190" -> "The access token in whatsapp.properties is wrong or has expired. Temporary tokens from"
+            case "190" -> "The access token in " + settingsFile + " is wrong or has expired. Temporary tokens from"
                     + " API Setup last about 24 hours; create a permanent System User token (see the README).";
             case "10", "200", "3" -> "The token is missing a permission. Generate it with the"
                     + " whatsapp_business_messaging (and whatsapp_business_management) permissions.";
-            case "100", "33" -> "Meta did not accept a value. Check that phoneNumberId (" + phoneNumberId + ") is the"
-                    + " Phone number ID from API Setup, and that the template name and language are right.";
+            case "100", "33" -> "Meta did not accept a value. Check that phoneNumberId (" + phoneNumberId + ") in "
+                    + settingsFile + " is the Phone number ID from API Setup"
+                    + (template != null ? ", and that the template name and language are right." : ".");
             case "131030" -> "The recipient " + recipient + " is not on the test number's allowed list. Add and"
                     + " verify it under WhatsApp > API Setup > To, or send from a real business number.";
             case "132000", "132001" -> "The template \"" + template + "\" in language \"" + templateLanguage
@@ -235,9 +252,14 @@ public final class WhatsAppSender {
             case "131026" -> "The recipient " + recipient + " cannot receive this message (not a WhatsApp number,"
                     + " or an outdated WhatsApp).";
             case "131047" -> "More than 24 hours passed since the recipient last wrote to the business number."
-                    + " Use an approved template (\"template\" in whatsapp.properties).";
+                    + " Use an approved template (\"template\" in " + settingsFile + ").";
             default -> null;
         };
+    }
+
+    private static String shorten(String text) {
+        String oneLine = text.replaceAll("\\s+", " ").trim();
+        return oneLine.length() <= MAX_SHOWN_BODY ? oneLine : oneLine.substring(0, MAX_SHOWN_BODY) + "...";
     }
 
     private static String firstGroup(Pattern pattern, String text) {

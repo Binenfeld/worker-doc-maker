@@ -23,6 +23,9 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
+# A relative folder means relative to where the script was started, not to the project folder used below.
+$InputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($InputFolder)
+
 # The program also looks for whatsapp.properties in the working directory, so run it from the project folder.
 $projectRoot = Split-Path $PSScriptRoot -Parent
 Set-Location $projectRoot

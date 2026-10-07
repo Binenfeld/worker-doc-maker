@@ -44,6 +44,9 @@ public final class WorkerParser {
     private static final String ID_HEADER = "עובד";
     private static final String NAME_HEADER = "שם עובד";
 
+    // Excel starts a UTF-8 CSV with this invisible character.
+    private static final String BYTE_ORDER_MARK = String.valueOf((char) 0xFEFF);
+
     private WorkerParser() {
     }
 
@@ -92,7 +95,7 @@ public final class WorkerParser {
                     + " In Excel, save the sheet again with File > Save As > \"CSV UTF-8 (Comma delimited)\""
                     + " (not the plain \"CSV (Comma delimited)\").", e);
         } catch (FileSystemException e) {
-            throw new UserFacingException("Cannot read " + csvFile + ": " + e.getMessage()
+            throw new UserFacingException("Cannot read " + csvFile + ": " + e.getReason()
                     + ". If it is open in another program, close it and run again.", e);
         }
     }
@@ -103,7 +106,7 @@ public final class WorkerParser {
             throw new UserFacingException(csvFile + " is empty. Export the month's sheet again.");
         }
         // Excel starts a UTF-8 CSV with an invisible byte order mark; it is not part of the first header.
-        List<String> header = splitCsvLine(lines.getFirst().replace("﻿", ""));
+        List<String> header = splitCsvLine(lines.getFirst().replace(BYTE_ORDER_MARK, ""));
         boolean idOk = cell(header, ID_COLUMN).equals(ID_HEADER);
         boolean nameOk = cell(header, NAME_COLUMN).equals(NAME_HEADER);
         if (!idOk || !nameOk) {

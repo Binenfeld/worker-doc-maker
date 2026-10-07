@@ -21,6 +21,8 @@ tasks.test {
 
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
+    // Runs on any JDK 21 or newer, whichever newer JDK builds it.
+    options.release = 21
 }
 
 // Print Hebrew and other non-ASCII text correctly in the IntelliJ run console.

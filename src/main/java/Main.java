@@ -47,7 +47,7 @@ public class Main {
         } catch (UserFacingException e) {
             printError(e.getMessage(), e, debug);
             System.exit(1);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             // Not one of the problems the program knows how to explain: a bug, or something unusual on this computer.
             printError("Unexpected error: " + describe(e), e, true);
             System.exit(1);
@@ -75,6 +75,10 @@ public class Main {
                     + ". Put a folder name that contains spaces in quotes.");
         }
         Path inputFolder = Path.of(folders.isEmpty() ? DEFAULT_INPUT_FOLDER : folders.getFirst()).toAbsolutePath();
+        if (!Files.isDirectory(inputFolder)) {
+            throw new UserFacingException("The input folder " + inputFolder + " does not exist. Create it and save"
+                    + " the month's sheet there (Excel: File > Save As > CSV UTF-8), or pass a different folder.");
+        }
 
         // Check the WhatsApp settings before doing any work, so a missing or broken file is reported straight away.
         WhatsAppSender sender = null;
@@ -106,6 +110,9 @@ public class Main {
         } catch (FileSystemException e) {
             throw new UserFacingException("Cannot write " + report + " - it is probably open in Word."
                     + " Close it and run again. (" + e.getReason() + ")", e);
+        } catch (IOException e) {
+            throw new UserFacingException("Cannot write " + report + ": " + describe(e)
+                    + ". Check that the folder is writable and the disk is not full.", e);
         }
         System.out.println("Report written to " + report);
 
@@ -134,10 +141,6 @@ public class Main {
     }
 
     private static Path findInputCsv(Path inputFolder) throws UserFacingException, IOException {
-        if (!Files.isDirectory(inputFolder)) {
-            throw new UserFacingException("The input folder " + inputFolder + " does not exist. Create it and save"
-                    + " the month's sheet there (Excel: File > Save As > CSV UTF-8), or pass a different folder.");
-        }
         FileIOHandler files = new FileIOHandler();
         Optional<Path> csv = files.newestFile(inputFolder, ".csv");
         if (csv.isPresent()) {
