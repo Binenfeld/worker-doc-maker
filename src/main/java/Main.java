@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -109,7 +110,7 @@ public class Main {
             ReportFactory.writeReport(workers, report);
         } catch (FileSystemException e) {
             throw new UserFacingException("Cannot write " + report + " - it is probably open in Word."
-                    + " Close it and run again. (" + e.getReason() + ")", e);
+                    + " Close it and run again. (" + Objects.requireNonNullElse(e.getReason(), e.toString()) + ")", e);
         } catch (IOException e) {
             throw new UserFacingException("Cannot write " + report + ": " + describe(e)
                     + ". Check that the folder is writable and the disk is not full.", e);

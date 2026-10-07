@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Reads workers from the monthly attendance sheet, exported from Excel as "CSV UTF-8".
@@ -95,7 +96,7 @@ public final class WorkerParser {
                     + " In Excel, save the sheet again with File > Save As > \"CSV UTF-8 (Comma delimited)\""
                     + " (not the plain \"CSV (Comma delimited)\").", e);
         } catch (FileSystemException e) {
-            throw new UserFacingException("Cannot read " + csvFile + ": " + e.getReason()
+            throw new UserFacingException("Cannot read " + csvFile + ": " + Objects.requireNonNullElse(e.getReason(), e.toString())
                     + ". If it is open in another program, close it and run again.", e);
         }
     }
