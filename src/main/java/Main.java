@@ -1,5 +1,6 @@
 import models.Worker;
 import utils.FileIOHandler;
+import utils.PdfConverter;
 import utils.ReportFactory;
 import utils.WhatsAppSender;
 import utils.WorkerParser;
@@ -11,7 +12,7 @@ import java.util.List;
 
 /**
  * Reads the newest attendance CSV in the input folder, writes the Hebrew worker report (.docx) next to it,
- * and sends the report on WhatsApp when {@code whatsapp.properties} is present.
+ * converts it to PDF with Word, and sends the PDF on WhatsApp when {@code whatsapp.properties} is present.
  *
  * <p>Usage: {@code java -jar WorkerDocMaker.jar [inputFolder]} (default {@value #DEFAULT_INPUT_FOLDER}).
  */
@@ -34,12 +35,17 @@ public class Main {
             System.out.println(w);
         }
 
-        Path report = inputCsv.resolveSibling("פירוט עובדים " + LocalDate.now() + ".docx");
+        String reportName = "פירוט עובדים " + LocalDate.now();
+        Path report = inputCsv.resolveSibling(reportName + ".docx");
         ReportFactory.writeReport(workers, report);
         System.out.println("Report written to " + report);
 
+        Path pdf = inputCsv.resolveSibling(reportName + ".pdf");
+        PdfConverter.convert(report, pdf);
+        System.out.println("PDF written to " + pdf);
+
         if (Files.exists(WHATSAPP_SETTINGS)) {
-            WhatsAppSender.fromProperties(WHATSAPP_SETTINGS).sendDocx(report);
+            WhatsAppSender.fromProperties(WHATSAPP_SETTINGS).sendDocument(pdf);
             System.out.println("Report sent on WhatsApp");
         } else {
             System.out.println("No " + WHATSAPP_SETTINGS.toAbsolutePath() + ", skipping WhatsApp");

@@ -1,9 +1,10 @@
 # WorkerDocMaker
 
-Turns the monthly worker attendance sheet (Excel) into a Hebrew Word report and sends it on WhatsApp.
+Turns the monthly worker attendance sheet (Excel) into a Hebrew Word report, converts it to PDF and sends the PDF
+on WhatsApp.
 
 ```
-1.csv (exported from Excel) ──► WorkerParser ──► List<Worker> ──► ReportFactory ──► פירוט עובדים <date>.docx ──► WhatsAppSender
+1.csv (exported from Excel) ──► WorkerParser ──► List<Worker> ──► ReportFactory ──► פירוט עובדים <date>.docx ──► PdfConverter ──► .pdf ──► WhatsAppSender
 ```
 
 ## What the report contains
@@ -24,6 +25,8 @@ are half the page wide, two side by side (the first on the right). Headings that
 - JDK 21 or newer (the project is developed with JDK 26)
 - Gradle, through the included wrapper (`gradlew`); no external libraries are needed
 - Excel, to export the sheet to CSV
+- Microsoft Word (desktop), to convert the report to PDF. `PdfConverter` drives it through PowerShell, so this
+  needs Windows. Without Word the run fails after the .docx is written.
 
 ## Running it
 
@@ -43,8 +46,8 @@ are half the page wide, two side by side (the first on the right). Headings that
    Or just **double-click `scripts\run.cmd`**, which does the same and keeps the window open to show the result.
    To use a different folder, add `-InputFolder D:\some\folder`. You can also run `Main` from IntelliJ.
 4. The program reads the **newest** `.csv` in the folder and writes the report next to it as
-   `פירוט עובדים <yyyy-mm-dd>.docx`. If `whatsapp.properties` exists in the project folder, the report is also
-   sent on WhatsApp.
+   `פירוט עובדים <yyyy-mm-dd>.docx`, plus a PDF copy (`.pdf`, same name) made with Word. If `whatsapp.properties`
+   exists in the project folder, the PDF is also sent on WhatsApp.
 
 The default input folder is `Main.DEFAULT_INPUT_FOLDER`. The jar also accepts a folder as its first argument
 (`java -jar WorkerDocMaker.jar <folder>`). Excel lock files (`~$…`) are ignored. `-ExecutionPolicy Bypass` is
@@ -90,7 +93,7 @@ If the sheet's columns change, update the column constants at the top of `Worker
 ## WhatsApp
 
 `WhatsAppSender` uses Meta's [WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api).
-It uploads the .docx, then sends it to one recipient as a document message. It is configured through
+It uploads the PDF, then sends it to one recipient as a document message. It is configured through
 `whatsapp.properties` in the project folder. Copy `whatsapp.properties.example` and fill in:
 
 | Key | Value |
@@ -120,13 +123,14 @@ scripts/
 ├── run.ps1                   runs the jar on the newest CSV in C:\workerdocmaker
 └── run.cmd                   double-click launcher for run.ps1
 src/main/java/
-├── Main.java                 entry point: newest CSV → parse → write report → send
+├── Main.java                 entry point: newest CSV → parse → write report → PDF → send
 ├── models/
 │   └── Worker.java           one worker + WorkerState (the day-symbol enum)
 └── utils/
     ├── WorkerParser.java     reads the CSV into workers
     ├── ReportFactory.java    lays out the report (sections, tables, sorting)
     ├── DocxWriter.java       minimal .docx writer (titles, headings, RTL, colored tables) without libraries
+    ├── PdfConverter.java     .docx → PDF through Word (PowerShell + COM); always closes the Word it starts
     ├── WhatsAppSender.java   WhatsApp Cloud API client (upload + send)
     └── FileIOHandler.java    small UTF-8 file helpers
 ```
