@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -32,6 +33,7 @@ import java.util.regex.Pattern;
  */
 public final class WhatsAppSender {
     private static final String GRAPH_API = "https://graph.facebook.com/v23.0/";
+    private static final String PDF_MIME = "application/pdf";
     private static final String DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     private static final Pattern ID_PATTERN = Pattern.compile("\"id\"\\s*:\\s*\"([^\"]+)\"");
 
@@ -65,9 +67,12 @@ public final class WhatsAppSender {
                 props.getProperty("templateLanguage", "he").trim());
     }
 
-    /** Uploads the .docx and sends it to the recipient; the file name shown in WhatsApp is the file's own name. */
-    public void sendDocx(Path file) throws IOException, InterruptedException {
-        String mediaId = uploadMedia(file, DOCX_MIME);
+    /**
+     * Uploads the document (.pdf or .docx) and sends it to the recipient; the file name shown in WhatsApp is the
+     * file's own name.
+     */
+    public void sendDocument(Path file) throws IOException, InterruptedException {
+        String mediaId = uploadMedia(file, mimeType(file));
         String document = "{\"id\":\"" + mediaId + "\",\"filename\":\"" + escapeJson(file.getFileName().toString()) + "\"}";
 
         String message;
@@ -89,6 +94,17 @@ public final class WhatsAppSender {
         send(request, "send message");
     }
 
+    private static String mimeType(Path file) {
+        String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
+        if (name.endsWith(".pdf")) {
+            return PDF_MIME;
+        }
+        if (name.endsWith(".docx")) {
+            return DOCX_MIME;
+        }
+        throw new IllegalArgumentException("Can only send .pdf or .docx files, not " + file.getFileName());
+    }
+
     // Uploads the file and returns its media ID.
     private String uploadMedia(Path file, String mimeType) throws IOException, InterruptedException {
         String boundary = "----WorkerDocMaker" + UUID.randomUUID();
@@ -96,8 +112,9 @@ public final class WhatsAppSender {
         parts.add(formField(boundary, "messaging_product", "whatsapp"));
         parts.add(formField(boundary, "type", mimeType));
         // The upload name is only used by Meta internally; an ASCII name avoids encoding issues with Hebrew.
+        String uploadName = mimeType.equals(PDF_MIME) ? "report.pdf" : "report.docx";
         parts.add(("--" + boundary + "\r\n"
-                + "Content-Disposition: form-data; name=\"file\"; filename=\"report.docx\"\r\n"
+                + "Content-Disposition: form-data; name=\"file\"; filename=\"" + uploadName + "\"\r\n"
                 + "Content-Type: " + mimeType + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
         parts.add(Files.readAllBytes(file));
         parts.add(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
