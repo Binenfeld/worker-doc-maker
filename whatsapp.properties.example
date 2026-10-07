@@ -1,4 +1,4 @@
-# Copy this file to whatsapp.properties (same folder) and fill it in.
+# Copy this file to C:\workerdocmaker\whatsapp.properties (the input folder) and fill it in.
 # whatsapp.properties holds your access token - never share it or commit it.
 
 # Access token. For testing: "Generate access token" on API Setup (expires in ~24h).
