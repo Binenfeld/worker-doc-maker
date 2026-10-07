@@ -133,7 +133,7 @@ public final class PdfConverter {
             if (!finished) {
                 stop(process, log);
                 throw new IOException("Word did not finish converting " + docx.getFileName() + " to PDF within "
-                        + TIMEOUT_SECONDS + " seconds and was stopped. Try again; if it keeps happening, open Word"
+                        + TIMEOUT_SECONDS + " seconds and was stopped. Run again; if it keeps happening, open Word"
                         + " once by hand and close any message it shows (activation, sign-in, safe mode).");
             }
 

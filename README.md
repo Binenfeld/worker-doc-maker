@@ -33,25 +33,40 @@ are half the page wide, two side by side (the first on the right). Headings that
 1. **Export the sheet.** Open the attendance workbook, select the current month's sheet (e.g. `10.2026`) and use
    File → Save As → **CSV UTF-8 (Comma delimited)**. Save it in `C:\workerdocmaker` under any name ending in
    `.csv`. It must be the UTF-8 variant, or the Hebrew text will be garbled.
-2. **Build** (once, and again after code changes):
+2. **WhatsApp settings** (once): copy `whatsapp.properties.example` to `C:\workerdocmaker\whatsapp.properties`
+   and fill it in (see [WhatsApp](#whatsapp)). It holds the access token, so it is not in the repository: a
+   fresh clone has none, and the run stops and says so until the file is there.
+3. **Build** (once, and again after code changes):
    ```
    powershell -ExecutionPolicy Bypass -File scripts\build.ps1
    ```
    This produces `build\libs\WorkerDocMaker.jar`. The script uses `JAVA_HOME` if it is set, otherwise the newest
    JDK in `~\.jdks` (where IntelliJ downloads JDKs).
-3. **Run:**
+4. **Run:**
    ```
    powershell -ExecutionPolicy Bypass -File scripts\run.ps1
    ```
    Or just **double-click `scripts\run.cmd`**, which does the same and keeps the window open to show the result.
-   To use a different folder, add `-InputFolder D:\some\folder`. You can also run `Main` from IntelliJ.
-4. The program reads the **newest** `.csv` in the folder and writes the report next to it as
-   `פירוט עובדים <yyyy-mm-dd>.docx`, plus a PDF copy (`.pdf`, same name) made with Word. If `whatsapp.properties`
-   exists in the project folder, the PDF is also sent on WhatsApp.
+   You can also run `Main` from IntelliJ. Options:
+   - `-InputFolder D:\some\folder`: use a different folder
+   - `-NoWhatsApp`: make the report and the PDF without sending anything, for testing
+   - `-Debug`: also print every worker read, and the full stack trace of an error
+5. The program reads the **newest** `.csv` in the folder and writes the report next to it as
+   `פירוט עובדים <yyyy-mm-dd>.docx`, plus a PDF copy (`.pdf`, same name) made with Word. Then it sends the PDF
+   on WhatsApp.
 
-The default input folder is `Main.DEFAULT_INPUT_FOLDER`. The jar also accepts a folder as its first argument
-(`java -jar WorkerDocMaker.jar <folder>`). Excel lock files (`~$…`) are ignored. `-ExecutionPolicy Bypass` is
-only needed if Windows blocks running scripts.
+The default input folder is `Main.DEFAULT_INPUT_FOLDER`. The jar takes the same options directly:
+`java -jar WorkerDocMaker.jar [folder] [--no-whatsapp] [--debug]`. Excel lock files (`~$…`) are ignored.
+`-ExecutionPolicy Bypass` is only needed if Windows blocks running scripts.
+
+### When something goes wrong
+
+The run stops with exit code 1 and a line starting with `ERROR:` that says what is wrong and how to fix it. For
+example, it reports a missing folder or CSV, a CSV saved as plain CSV instead of CSV UTF-8, a file that isn't
+the attendance sheet, a report left open in Word, a missing Word install, missing or malformed WhatsApp
+settings, and Meta's errors (expired token, number not on the test number's allowed list, unapproved template,
+no internet connection). `run.cmd` then shows "Something went wrong". An `ERROR: Unexpected error` comes with a
+stack trace; that one is a bug or something unusual on the computer.
 
 ## Input format
 
@@ -94,7 +109,8 @@ If the sheet's columns change, update the column constants at the top of `Worker
 
 `WhatsAppSender` uses Meta's [WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api).
 It uploads the PDF, then sends it to one recipient as a document message. It is configured through
-`whatsapp.properties` in the project folder. Copy `whatsapp.properties.example` and fill in:
+`whatsapp.properties`, looked up first in the input folder (`C:\workerdocmaker`), then in the folder the program
+runs from (the project folder for `run.ps1` and IntelliJ). Copy `whatsapp.properties.example` and fill in:
 
 | Key | Value |
 |---|---|
@@ -112,8 +128,10 @@ Things to know:
 - **Meta's test number** can only send to numbers verified on the API Setup page. Otherwise it fails with
   error `131030 Recipient phone number not in allowed list`.
 - **An accepted message isn't always delivered.** A successful run means Meta accepted the message; delivery
-  failures, such as an expired 24-hour window, are only reported by Meta afterwards.
-- **Without the file**, the WhatsApp step is skipped and the report is still written.
+  failures, such as an expired 24-hour window, are only reported by Meta afterwards. Without a template, the
+  run prints a reminder of this.
+- **Without the file**, the run stops before doing any work and says where it looked. Use `-NoWhatsApp` to
+  make the report without sending it.
 
 ## Project structure
 
@@ -131,7 +149,8 @@ src/main/java/
     ├── ReportFactory.java    lays out the report (sections, tables, sorting)
     ├── DocxWriter.java       minimal .docx writer (titles, headings, RTL, colored tables) without libraries
     ├── PdfConverter.java     .docx → PDF through Word (PowerShell + COM); always closes the Word it starts
-    ├── WhatsAppSender.java   WhatsApp Cloud API client (upload + send)
+    ├── WhatsAppSender.java   WhatsApp Cloud API client (upload + send), explains Meta's errors
+    ├── UserFacingException.java  a problem the user can fix; Main prints its message without a stack trace
     └── FileIOHandler.java    small UTF-8 file helpers
 ```
 

@@ -3,12 +3,15 @@ package utils;
 import models.Worker;
 
 import java.io.IOException;
+import java.nio.charset.MalformedInputException;
+import java.nio.file.FileSystemException;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Reads workers from the monthly attendance sheet, exported from Excel as "CSV UTF-8".
@@ -38,6 +41,13 @@ public final class WorkerParser {
     private static final int PASSPORT_COLUMN = 8;
     private static final int FIRST_DAY_COLUMN = 9; // day 1 of the month; day d is at FIRST_DAY_COLUMN - 1 + d
 
+    // Header texts used to recognize the sheet.
+    private static final String ID_HEADER = "עובד";
+    private static final String NAME_HEADER = "שם עובד";
+
+    // Excel starts a UTF-8 CSV with this invisible character.
+    private static final String BYTE_ORDER_MARK = String.valueOf((char) 0xFEFF);
+
     private WorkerParser() {
     }
 
@@ -46,8 +56,9 @@ public final class WorkerParser {
      * A worker can appear on several rows (one per site/company); the row with their most recent
      * entry up to today decides their company, location, profession, tenure and state.
      */
-    public static List<Worker> parseWorkerCsv(Path csvFile) throws IOException {
-        List<String> lines = new FileIOHandler().readAllLines(csvFile);
+    public static List<Worker> parseWorkerCsv(Path csvFile) throws IOException, UserFacingException {
+        List<String> lines = readLines(csvFile);
+        checkHeader(csvFile, lines);
         int today = LocalDate.now().getDayOfMonth();
 
         // Group the rows by worker ID (skipping the header row). Rows without an ID are not workers:
@@ -70,7 +81,48 @@ public final class WorkerParser {
                     cell(row, COUNTRY_COLUMN), cell(row, NAME_COLUMN), cell(row, PASSPORT_COLUMN),
                     Worker.WorkerState.translateSymbolToState(cell(row, dayColumn(today))), tenure));
         }
+        if (workers.isEmpty()) {
+            throw new UserFacingException(csvFile + " has the sheet's header but no workers (no row has a worker ID in"
+                    + " column " + columnLetter(ID_COLUMN) + "). Check that the right sheet was exported.");
+        }
         return workers;
+    }
+
+    private static List<String> readLines(Path csvFile) throws IOException, UserFacingException {
+        try {
+            return new FileIOHandler().readAllLines(csvFile);
+        } catch (MalformedInputException e) {
+            throw new UserFacingException(csvFile + " is not saved as UTF-8, so its Hebrew text cannot be read."
+                    + " In Excel, save the sheet again with File > Save As > \"CSV UTF-8 (Comma delimited)\""
+                    + " (not the plain \"CSV (Comma delimited)\").", e);
+        } catch (FileSystemException e) {
+            throw new UserFacingException("Cannot read " + csvFile + ": " + Objects.requireNonNullElse(e.getReason(), e.toString())
+                    + ". If it is open in another program, close it and run again.", e);
+        }
+    }
+
+    // Makes sure this is the attendance sheet: the worker ID and name columns must be where the parser expects them.
+    private static void checkHeader(Path csvFile, List<String> lines) throws UserFacingException {
+        if (lines.isEmpty()) {
+            throw new UserFacingException(csvFile + " is empty. Export the month's sheet again.");
+        }
+        // Excel starts a UTF-8 CSV with an invisible byte order mark; it is not part of the first header.
+        List<String> header = splitCsvLine(lines.getFirst().replace(BYTE_ORDER_MARK, ""));
+        boolean idOk = cell(header, ID_COLUMN).equals(ID_HEADER);
+        boolean nameOk = cell(header, NAME_COLUMN).equals(NAME_HEADER);
+        if (!idOk || !nameOk) {
+            throw new UserFacingException(csvFile + " does not look like the attendance sheet: column "
+                    + columnLetter(ID_COLUMN) + " should be \"" + ID_HEADER + "\" (found \"" + cell(header, ID_COLUMN)
+                    + "\") and column " + columnLetter(NAME_COLUMN) + " should be \"" + NAME_HEADER + "\" (found \""
+                    + cell(header, NAME_COLUMN) + "\"). Check that the month's sheet was exported, with the header"
+                    + " in the first row. If the sheet's columns have changed, update the column constants in"
+                    + " WorkerParser.");
+        }
+    }
+
+    // Excel's letter for a 0-based column index below 26 (0 = A).
+    private static char columnLetter(int column) {
+        return (char) ('A' + column);
     }
 
     private static int dayColumn(int day) {
