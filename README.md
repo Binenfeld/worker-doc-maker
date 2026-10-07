@@ -8,15 +8,16 @@ Turns the monthly worker attendance sheet (Excel) into a Hebrew Word report and 
 
 ## What the report contains
 
-The report is right-to-left Hebrew, with colored tables:
+The report is right-to-left Hebrew, with colored tables. Each section starts on its own page, and its tables
+are half the page wide, two side by side (the first on the right). Headings that show a number of workers read
+`<title> - סך הכל: <amount>`.
 
-| Section | Content |
-|---|---|
-| Title + date line | `פירוט עובדים`, today's date and the total number of workers |
-| Companies table | Every company (except לא משוייך), alphabetical, with its number of workers and a total row |
-| לא משוייך | Unassigned workers, one sub-heading per country of origin, listing each worker's name, profession and tenure (ותק) |
-| סיכום → עובדים לפי ארץ מוצא | Number of workers per country of origin |
-| סיכום → אינטרויזה | Number of workers on intervisa today |
+| Page | Section | Content |
+|---|---|---|
+| 1 | Title + date line | `פירוט עובדים`, today's date and the total number of workers |
+| 1 | חברות | Every company (except לא משוייך), alphabetical, with its number of workers. The list is split over the two halves, and the left half ends with the total row |
+| 2 | לא משוייך | Unassigned workers, one table per country of origin, listing each worker's name, profession and tenure (ותק) |
+| 3 | סיכום | Number of workers per country of origin (right) and number of workers on intervisa today (left) |
 
 ## Requirements
 
