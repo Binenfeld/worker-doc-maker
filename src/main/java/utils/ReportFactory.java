@@ -21,7 +21,7 @@ import java.util.function.Function;
 /**
  * Builds the Hebrew worker report (.docx).
  *
- * <p>Document layout. Each heading 1 starts a new page, and the tables under it are laid out two per row
+ * <p>Document layout. Each heading 1 after the first starts a new page, and the tables under it are laid out two per row
  * (right half, then left half) so they stay narrow:
  * <pre>
  *   Title:      פירוט עובדים
@@ -32,8 +32,8 @@ import java.util.function.Function;
  *     Heading 2 + table, one per country of origin:  country - סך הכל: amount
  *                 name | profession | tenure, one row per worker              [green/orange/teal/burgundy]
  *   Heading 1:  סיכום                                                                (new page)
- *     Heading 2:  עובדים לפי ארץ מוצא  -> table: country | number of workers (all workers)  [purple]
- *     Heading 2:  אינטרויזה            -> table: number of workers on intervisa today      [gold]
+ *     Heading 2:  עובדים לפי ארץ מוצא  -> table: country | number of workers (all workers)  [purple] (right)
+ *     Heading 2:  אינטרויזה            -> table: number of workers on intervisa today      [gold]   (left)
  * </pre>
  */
 public final class ReportFactory {

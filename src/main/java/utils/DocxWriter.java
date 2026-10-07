@@ -37,7 +37,9 @@ public final class DocxWriter {
      * A table with an optional heading above it, for {@link #addSideBySide(Table, Table)}.
      *
      * @param heading       level-2 heading shown above the table, or null for none
-     * @param headers       header row (shaded, bold, repeated at the top of each page)
+     * @param colors        color theme of the table
+     * @param headers       header row (shaded, bold); Word does not repeat it on the next page for side-by-side
+     *                      tables, because they are nested in a layout table
      * @param rows          body rows; each row must have one cell per header
      * @param footer        optional bold total row at the bottom, or null for none
      * @param columnWeights relative column widths, e.g. {3, 1} makes the first column three times wider;
@@ -45,6 +47,9 @@ public final class DocxWriter {
      */
     public record Table(String heading, TableColors colors, List<String> headers, List<List<String>> rows,
                         List<String> footer, int... columnWeights) {
+        public Table {
+            columnWeights = columnWeights.clone(); // so a caller changing its array afterwards doesn't affect the table
+        }
     }
 
     /**
@@ -78,18 +83,19 @@ public final class DocxWriter {
 
     /** Adds a heading; level must be 1, 2 or 3. */
     public DocxWriter addHeading(int level, String text) {
-        if (level < 1 || level > 3) {
-            throw new IllegalArgumentException("Heading level must be 1, 2 or 3, got " + level);
-        }
-        return addStyledParagraph("Heading" + level, text, false);
+        return addStyledParagraph(headingStyle(level), text, false);
     }
 
     /** Same as {@link #addHeading(int, String)}, but the heading starts a new page. */
     public DocxWriter addHeadingOnNewPage(int level, String text) {
+        return addStyledParagraph(headingStyle(level), text, true);
+    }
+
+    private static String headingStyle(int level) {
         if (level < 1 || level > 3) {
             throw new IllegalArgumentException("Heading level must be 1, 2 or 3, got " + level);
         }
-        return addStyledParagraph("Heading" + level, text, true);
+        return "Heading" + level;
     }
 
     /** Adds a normal paragraph. Line breaks (\n) inside the text are kept. */
@@ -272,10 +278,11 @@ public final class DocxWriter {
             body.append("<w:vAlign w:val=\"center\"/></w:tcPr>");
 
             // First column follows the reading direction; the other columns (numbers) are centered.
-            body.append("<w:p><w:pPr><w:spacing w:before=\"60\" w:after=\"60\" w:line=\"240\" w:lineRule=\"auto\"/>");
+            body.append("<w:p><w:pPr>");
             if (rightToLeft) {
                 body.append("<w:bidi/>");
             }
+            body.append("<w:spacing w:before=\"60\" w:after=\"60\" w:line=\"240\" w:lineRule=\"auto\"/>");
             if (c > 0) {
                 body.append("<w:jc w:val=\"center\"/>");
             }
